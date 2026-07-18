@@ -1,0 +1,6 @@
+langgraph
+openai
+fastapi
+uvicorn[standard]
+pytest
+pydantic

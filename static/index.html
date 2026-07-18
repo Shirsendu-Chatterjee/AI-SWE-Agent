@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI SWE Agent</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#0f1115; color:#e6e6e6; font-family: ui-monospace, monospace; max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.2rem; color:#7dd3fc; }
+  textarea { width:100%; height:70px; background:#1a1d24; color:#e6e6e6; border:1px solid #333; border-radius:6px; padding:.6rem; font-family:inherit; }
+  button { background:#7dd3fc; color:#0f1115; border:none; padding:.5rem 1rem; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:.5rem; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .card { background:#1a1d24; border:1px solid #2a2d34; border-radius:8px; padding:1rem; margin-top:1rem; }
+  .stage { display:flex; gap:.5rem; flex-wrap:wrap; margin:1rem 0; }
+  .pill { border:1px solid #333; border-radius:999px; padding:.2rem .7rem; font-size:.8rem; }
+  .ok { border-color:#4ade80; color:#4ade80; }
+  .bad { border-color:#f87171; color:#f87171; }
+  pre { white-space: pre-wrap; word-break: break-word; font-size:.85rem; }
+  a { color:#7dd3fc; }
+</style>
+</head>
+<body>
+  <h1>AI Software Engineering Agent</h1>
+  <textarea id="req" placeholder="Create a REST API for a todo list with JWT auth"></textarea><br>
+  <button id="go">Run pipeline</button>
+  <div id="status"></div>
+  <div id="out"></div>
+
+<script>
+const go = document.getElementById('go');
+const status = document.getElementById('status');
+const out = document.getElementById('out');
+
+function pill(label, ok) {
+  return `<span class="pill ${ok === undefined ? '' : (ok ? 'ok' : 'bad')}">${label}</span>`;
+}
+
+go.onclick = async () => {
+  const requirement = document.getElementById('req').value.trim();
+  if (!requirement) return;
+  go.disabled = true;
+  out.innerHTML = '';
+  status.innerHTML = 'starting run...';
+
+  const res = await fetch('/run', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({requirement})
+  });
+  const {run_id} = await res.json();
+  status.innerHTML = `run <b>${run_id}</b> — planning, coding, testing...`;
+
+  const poll = setInterval(async () => {
+    const r = await fetch(`/runs/${run_id}`);
+    const data = await r.json();
+    if (data.status === 'running') return;
+    clearInterval(poll);
+    go.disabled = false;
+
+    if (data.status === 'error') {
+      status.innerHTML = `<span class="pill bad">error</span> ${data.error}`;
+      return;
+    }
+    const res_ = data.result;
+    status.innerHTML = `run <b>${run_id}</b> complete — ` +
+      `<a href="/runs/${run_id}/download">download files</a>`;
+
+    out.innerHTML = `
+      <div class="stage">
+        ${pill('tests ' + (res_.tests_passed ? 'passed' : 'failed'), res_.tests_passed)}
+        ${pill('review ' + (res_.approved ? 'approved' : 'rejected'), res_.approved)}
+        ${pill('security ' + (res_.security_ok ? 'secure' : 'issues'), res_.security_ok)}
+        ${pill('iterations: ' + res_.iteration)}
+      </div>
+      <div class="card"><b>Plan</b><pre>${res_.plan}</pre></div>
+      <div class="card"><b>Files</b><pre>${Object.keys(res_.files).join('\\n')}</pre></div>
+      <div class="card"><b>Test output</b><pre>${res_.test_output}</pre></div>
+      <div class="card"><b>Review</b><pre>${res_.review}</pre></div>
+      <div class="card"><b>Security report</b><pre>${res_.security_report}</pre></div>
+      <div class="card"><b>Performance notes</b><pre>${res_.performance_report}</pre></div>
+      <div class="card"><b>Docs generated</b><pre>${Object.keys(res_.docs).join('\\n')}</pre></div>
+      <div class="card"><b>Deployment files</b><pre>${Object.keys(res_.deployment).join('\\n')}</pre></div>
+    `;
+  }, 2000);
+};
+</script>
+</body>
+</html>
